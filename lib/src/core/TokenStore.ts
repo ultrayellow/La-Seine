@@ -1,14 +1,13 @@
-import { FetchConfig, sendRequest } from './sendRequest.js';
-import { sleepMs } from '../util/sleepMs.js';
-import { ApiClientConfig } from './ApiClientConfig.js';
+import { ApiClientConfig } from '../types/ApiClientConfig.js';
 import { RateLimiter } from './RateLimiter.js';
+import { sendRequest } from './sendRequest.js';
 
 interface TokenDto {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  scope: string;
-  created_at: number;
+  readonly access_token: string;
+  readonly token_type: string;
+  readonly expires_in: number;
+  readonly scope: string;
+  readonly created_at: number;
 }
 
 export interface Token {
@@ -18,20 +17,15 @@ export interface Token {
   readonly rateLimiter: RateLimiter;
 }
 
-const DEFAULT_RATE_LIMIT_CONFIG = {
+const DEFAULT_RATE_LIMIT_CONFIG: Required<
+  Pick<ApiClientConfig, 'rateLimitPerHour' | 'rateLimitPerSec'>
+> = {
   rateLimitPerHour: 1200,
   rateLimitPerSec: 2,
-} satisfies Partial<ApiClientConfig>;
-
-const DEFAULT_FETCH_CONFIG = {
-  retryCount: 3,
-  retryInterval: 1000,
-  errorStatusFn: (status: number): boolean => status >= 400,
-} satisfies FetchConfig;
+};
 
 export class TokenStore {
   private readonly apiClientConfig: Required<ApiClientConfig>;
-  private readonly fetchConfig = DEFAULT_FETCH_CONFIG;
 
   private token: Token | null = null;
 
@@ -41,6 +35,17 @@ export class TokenStore {
       ...apiClientConfig,
     };
   }
+
+  public initialize = async (): Promise<void> => {
+    try {
+      // todo
+      // try to get access token for checking valid client
+      await this.getToken();
+    } catch (e) {
+      console.error('initialize fail, error:', e);
+      throw Error('initialize token store fail');
+    }
+  };
 
   public getApiClientId = (): string => {
     return this.apiClientConfig.clientId;
@@ -54,7 +59,7 @@ export class TokenStore {
 
       this.token = convertDtoToken(this.apiClientConfig, tokenPayload);
 
-      console.log(`token expiresAt: ${this.token.expiredAt}`);
+      console.log(`token expiresAt: ${new Date(this.token.expiredAt)}`);
       return this.token;
     }
 
@@ -62,8 +67,8 @@ export class TokenStore {
   };
 
   private issueToken = async (): Promise<Readonly<TokenDto>> => {
-    const response = await sendRequest(this.fetchConfig, {
-      endPoint: 'oauth/token',
+    const response = await sendRequest({
+      url: 'oauth/token',
       init: {
         method: 'POST',
         headers: {
@@ -80,6 +85,7 @@ export class TokenStore {
     const tokenPayload: unknown = await response.json();
     assertIsTokenDto(tokenPayload);
 
+    // todo: verbose
     console.log(`token issued: ${tokenPayload.access_token}`);
 
     return tokenPayload;

@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "pnpm run build && pnpm run start",
     "build": "tsc",
-    "start": "node ./dist/index.js",
+    "start": "node ./dist/test.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepare": "rm -rf dist && mkdir -p dist && tsc",
     "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix --cache",

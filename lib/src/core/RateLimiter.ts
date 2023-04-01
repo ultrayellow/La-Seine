@@ -1,4 +1,4 @@
-import { ApiClientConfig } from './ApiClientConfig.js';
+import { ApiClientConfig } from '../types/ApiClientConfig.js';
 
 export class RateLimiter {
   private readonly config: Required<ApiClientConfig>;
