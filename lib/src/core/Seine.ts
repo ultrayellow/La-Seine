@@ -1,9 +1,10 @@
-import { Token, TokenStore } from './TokenStore.js';
+import { TokenStore } from './TokenStore.js';
 import { sendRequestWithToken } from './sendRequest.js';
 import { sleepMs } from '../util/sleepMs.js';
 import { ApiClientConfig } from '../types/ApiClientConfig.js';
 import { SeineInstance } from '../index.js';
 import { RequestArg, SeineResult } from '../types/Seine.js';
+import { Token } from './Token.js';
 
 interface RequestArgWithId extends RequestArg {
   index: number;
@@ -39,13 +40,19 @@ export class Seine implements SeineInstance {
     this.requestPool.push({ url, init, index: this.requestPool.length });
   };
 
-  // too many side effects...
-  // todo: retry 횟수를 인자로 받기?
+  // side effect: clears this.requestPool
   public awaitResponses = async (): Promise<SeineResult> => {
     const requestPool = this.requestPool.splice(0, this.requestPool.length);
+    const requestChunks = chunkRequests(requestPool);
+
+    for (const requestChunk of requestChunks) {
+      const responseChunk = await this.requestByChunk(requestChunk);
+    }
+
     const resFulfilled: PromiseFulfilledResult<Response>[] = [];
 
     // for (let i = 0; i < MAX_TRY_COUNT; i++) {
+
     const currResPromises = await this.requestSingleRun(requestPool);
     resFulfilled.push(...currResPromises.filter(isFulfilled));
 
@@ -67,14 +74,39 @@ export class Seine implements SeineInstance {
     };
   };
 
+  private requestByChunk = (requestChunk: RequestArgWithId[]) => {
+    const responsePromises: Promise<Response>[] = [];
+
+    for (const request of requestChunk) {
+      const promise = this.sendRequest(request);
+      if (!promise) {
+      }
+    }
+  };
+
+  // todo
+  private sendRequest = async (
+    request: RequestArgWithId,
+  ): Promise<Response | null> => {
+    const token = await this.selectToken();
+    if (!token) {
+      return null;
+    }
+
+    token.updateAtRequest();
+    const promise = sendRequestWithToken(request, token.accessToken);
+
+    return promise;
+  };
+
   // todo: request?
   private requestSingleRun = async (
     requestPool: RequestArgWithId[],
   ): Promise<PromiseSettledResult<Response>[]> => {
     const resPromises: PromiseSettledResult<Response>[] = [];
 
-    while (requestPool.length > 0) {
-      const requests = requestPool.splice(0, REQUEST_CHUNK_SIZE);
+    for (let i = 0; i < requestPool.length; i += REQUEST_CHUNK_SIZE) {
+      const requests = requestPool.slice(i, REQUEST_CHUNK_SIZE);
       const currResPromises = await this.sendRequests(requests);
 
       resPromises.push(...currResPromises);
@@ -128,7 +160,7 @@ export class Seine implements SeineInstance {
         const token = await tokenStore.getToken();
 
         // todo
-        if (!token.rateLimiter.isLimitReaced()) {
+        if (!token.isRateLimitReached()) {
           return token;
         }
       }
@@ -151,7 +183,7 @@ export class Seine implements SeineInstance {
       }
 
       // todo
-      token.rateLimiter.updateAtRequest();
+      token.updateAtRequest();
 
       const promise = sendRequestWithToken(currRequest, token.accessToken);
 
@@ -173,6 +205,12 @@ const isRequestAborted = (requestPool: RequestArgWithId[]) => {
   return requestPool.length;
 };
 
+const isRateLimitReached = (
+  token: Token | Promise<Response> | null,
+): token is null => {
+  return token === null;
+};
+
 // const groupResPromises = (
 //   resPromises: PromiseSettledResult<Response>[],
 // ): Omit<SeineResult, 'isAborted'> => {
@@ -181,6 +219,18 @@ const isRequestAborted = (requestPool: RequestArgWithId[]) => {
 //     rejected: resPromises.filter(isRejected),
 //   };
 // };
+
+const chunkRequests = (
+  requestPool: RequestArgWithId[],
+): Array<RequestArgWithId[]> => {
+  const chunked: Array<RequestArgWithId[]> = [];
+
+  for (let i = 0; i < requestPool.length; i += REQUEST_CHUNK_SIZE) {
+    chunked.push(requestPool.splice(i, REQUEST_CHUNK_SIZE));
+  }
+
+  return chunked;
+};
 
 const isFulfilled = <T>(
   result: PromiseSettledResult<T>,

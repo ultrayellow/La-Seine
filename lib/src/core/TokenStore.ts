@@ -1,27 +1,10 @@
-import { ApiClientConfig } from '../types/ApiClientConfig.js';
-import { RateLimiter } from './RateLimiter.js';
+import { ApiClientConfig, RateLimitConfig } from '../types/ApiClientConfig.js';
 import { sendRequest } from './sendRequest.js';
+import { Token, TokenDto } from './Token.js';
 
-interface TokenDto {
-  readonly access_token: string;
-  readonly token_type: string;
-  readonly expires_in: number;
-  readonly scope: string;
-  readonly created_at: number;
-}
-
-export interface Token {
-  readonly accessToken: string;
-  readonly createdAt: number;
-  readonly expiredAt: number;
-  readonly rateLimiter: RateLimiter;
-}
-
-const DEFAULT_RATE_LIMIT_CONFIG: Required<
-  Pick<ApiClientConfig, 'rateLimitPerHour' | 'rateLimitPerSec'>
-> = {
-  rateLimitPerHour: 1200,
-  rateLimitPerSec: 2,
+const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
+  limitPerHour: 1200,
+  limitPerSec: 2,
 };
 
 export class TokenStore {
@@ -42,7 +25,7 @@ export class TokenStore {
       // try to get access token for checking valid client
       await this.getToken();
     } catch (e) {
-      console.error('initialize fail, error:', e);
+      // console.error('initialize fail, error:', e);
       throw Error('initialize token store fail');
     }
   };
@@ -54,12 +37,11 @@ export class TokenStore {
   public getToken = async (): Promise<Token> => {
     const currToken = this.token;
 
-    if (isEmptyToken(currToken) || isExpiredToken(currToken)) {
+    if (isEmpty(currToken) || currToken.isExpired()) {
       const tokenPayload = await this.issueToken();
 
-      this.token = convertDtoToken(this.apiClientConfig, tokenPayload);
+      this.token = new Token(tokenPayload, this.apiClientConfig);
 
-      console.log(`token expiresAt: ${new Date(this.token.expiredAt)}`);
       return this.token;
     }
 
@@ -86,7 +68,7 @@ export class TokenStore {
     assertIsTokenDto(tokenPayload);
 
     // todo: verbose
-    console.log(`token issued: ${tokenPayload.access_token}`);
+    // console.log(`token issued: ${tokenPayload.access_token}`);
 
     return tokenPayload;
   };
@@ -110,36 +92,6 @@ function assertIsTokenDto(
   throw Error('library outdated');
 }
 
-const convertDtoToken = (
-  apiClientConfig: Required<ApiClientConfig>,
-  tokenDto: Readonly<TokenDto>,
-): Token => {
-  return {
-    accessToken: tokenDto.access_token,
-    createdAt: toMilliseconds(tokenDto.created_at),
-    expiredAt: getExpiredDate(tokenDto.expires_in),
-    rateLimiter: new RateLimiter(apiClientConfig),
-  };
-};
-
-const isEmptyToken = (token: Token | null): token is null => {
+const isEmpty = (token: Token | null): token is null => {
   return token === null;
-};
-
-const isExpiredToken = (token: Token): boolean => {
-  const currTime = new Date().getTime();
-  return currTime >= token.expiredAt;
-};
-
-const getExpiredDate = (expiresIn: number): number => {
-  const currTime = new Date().getTime();
-  return floorUnderSeconds(currTime + toMilliseconds(expiresIn));
-};
-
-const toMilliseconds = (seconds: number): number => {
-  return seconds * 1000;
-};
-
-const floorUnderSeconds = (milliseconds: number): number => {
-  return (milliseconds / 1000) * 1000;
 };

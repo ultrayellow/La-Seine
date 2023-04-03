@@ -1,15 +1,15 @@
-import { ApiClientConfig } from '../types/ApiClientConfig.js';
+import { RateLimitConfig } from '../types/ApiClientConfig.js';
 
 export class RateLimiter {
-  private readonly config: Required<ApiClientConfig>;
+  private readonly config: RateLimitConfig;
 
   private secondlyLimitResetAt: number;
   private secondlySendCount: number;
   private hourlyLimtResetAt: number;
   private hourlySendCount: number;
 
-  constructor(apiClientConfig: Required<ApiClientConfig>) {
-    this.config = apiClientConfig;
+  constructor(rateLimitConfig: RateLimitConfig) {
+    this.config = rateLimitConfig;
 
     this.secondlyLimitResetAt = 0;
     this.secondlySendCount = 0;
@@ -21,14 +21,14 @@ export class RateLimiter {
     const currTime = new Date().getTime();
 
     if (
-      this.hourlySendCount >= this.config.rateLimitPerHour &&
+      this.hourlySendCount >= this.config.limitPerHour &&
       !this.isNewHour(currTime)
     ) {
       return true;
     }
 
     if (
-      this.secondlySendCount >= this.config.rateLimitPerSec &&
+      this.secondlySendCount >= this.config.limitPerSec &&
       !this.isNewSec(currTime)
     ) {
       return true;

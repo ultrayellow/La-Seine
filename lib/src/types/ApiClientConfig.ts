@@ -1,19 +1,10 @@
-export interface ApiClientConfig {
+export interface RateLimitConfig {
+  readonly limitPerSec: number;
+  readonly limitPerHour: number;
+}
+
+export interface ApiClientConfig extends Partial<RateLimitConfig> {
   readonly clientName: string;
   readonly clientId: string;
   readonly clientSecret: string;
-  readonly rateLimitPerSec?: number;
-  readonly rateLimitPerHour?: number;
 }
-
-// todo remove?
-export const logClientConfig = (config: Required<ApiClientConfig>): void => {
-  console.log(`
-  -------------
-  |-clientName: ${config.clientName}
-  |-clientId: ${config.clientId}
-  |-clientSecret: ${config.clientSecret}
-  |-request per sec: ${config.rateLimitPerSec}
-  |-request per hour: ${config.rateLimitPerHour}
-  --------------------`);
-};
