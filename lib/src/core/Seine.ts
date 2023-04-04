@@ -53,6 +53,11 @@ export class Seine implements SeineInstance {
     }
   };
 
+  /**
+   *
+   * Only add request to this.requestPool with id (index) for sorting on return.
+   * Calling this function doesn't send request.
+   */
   public addRequest = ({ url, init }: FetchArg): void => {
     this.requestPool.push({ url, init, id: this.requestPool.length });
   };

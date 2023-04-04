@@ -41,6 +41,28 @@ export type SeineResult = SeineSuccess | SeineFail;
 
 export interface SeineInstance {
   readonly addApiClient: (apiClientConfig: ApiClientConfig) => Promise<void>;
+
+  /**
+   *
+   * @param fecthArg
+   * ```ts
+   * { url: RequestInfo | URL, init?: RequestInit }
+   * ```
+   * @example
+   * ```ts
+   * import seine from 'seine';
+   *
+   * const apiClientConfig = SeineUtil.generateFtClient()
+   *
+   * seine.addCient(SeineClientBuilder)
+   *
+   * for (let i = 0; i < 10; i++) {
+   *  seine.addRequest({ `https://api.intra.42.fr/v2/users?page[number]=${i}`})
+   * }
+   *
+   * const result = await seine.awaitResponses()
+   * ```
+   */
   readonly addRequest: (fecthArg: FetchArg) => void;
   readonly awaitResponses: () => Promise<SeineResult>;
 }
