@@ -1,23 +1,24 @@
-export const enum SeineErrorCode {
-  FETCH_ERROR,
-  FT_SERVER_ERROR,
-  HOURLY_LIMIT_REACHED,
-  MAX_FAIL_LIMIT_REACHED,
+export class SeineRateLimitError extends Error {
+  readonly reason = 'ratelimit';
+
+  constructor() {
+    super('SeineError');
+  }
 }
 
-const seineErrorMessage = [
-  'Fetch error occurred.',
-  '42 intra server is currently unavailable.',
-  "All 42 api client's hourly rate limit reached.",
-  'Too many request failure.',
-];
+export class SeineAbortError extends Error {
+  readonly reason = 'aborted';
 
-export class SeineError extends Error {
-  reason: SeineErrorCode;
+  constructor() {
+    super('SeineError');
+  }
+}
 
-  constructor(name: string, reason: SeineErrorCode) {
-    super(name);
-    this.reason = reason;
+export class SeineInternalError extends Error {
+  readonly reason = 'SeineInternal';
+
+  constructor() {
+    super('SeineError');
   }
 }
 

@@ -1,5 +1,3 @@
-import { RequestArg } from '../types/Seine.js';
-
 export class ResponseStatusError extends Error {
   name = 'ResponseStautsError';
   status: number;
@@ -11,15 +9,9 @@ export class ResponseStatusError extends Error {
   }
 }
 
-const FT_API_EP = 'https://api.intra.42.fr/v2/';
-
-export const sendRequest = async (
-  requestArg: RequestArg,
-): Promise<Response> => {
-  const { url, init } = requestArg;
-  const finalUrl = `${FT_API_EP}${url}`;
-
-  const response = await fetch(finalUrl, init);
+export const sendRequest: typeof fetch = async (url, init) => {
+  console.log('sending', url);
+  const response = await fetch(url, init);
 
   if (isErrorStatus(response.status)) {
     throw new ResponseStatusError(response.status);
@@ -29,11 +21,10 @@ export const sendRequest = async (
 };
 
 export const sendRequestWithToken = (
-  requestArg: RequestArg,
   accessToken: string,
+  url: RequestInfo | URL,
+  init?: RequestInit,
 ): Promise<Response> => {
-  const { url, init } = requestArg;
-
   const newInit: RequestInit = {
     ...init,
     headers: {
@@ -42,7 +33,7 @@ export const sendRequestWithToken = (
     },
   };
 
-  const responseData = sendRequest({ url, init: newInit });
+  const responseData = sendRequest(url, newInit);
   return responseData;
 };
 

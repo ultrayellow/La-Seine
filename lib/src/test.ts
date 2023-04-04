@@ -16,6 +16,8 @@ const getApiClientConfig = (): ApiClientConfig => {
 
   assertHasEnv(envValues);
 
+  console.log(envValues);
+
   return envValues;
 };
 
@@ -32,26 +34,30 @@ const main = async (): Promise<void> => {
 
   await seine.addApiClient(getApiClientConfig());
 
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 100; i++) {
     seine.addRequest(
-      `users?page[number]=${i}`,
+      {
+        url: 'https://api.intra.42.fr/v2/users?page[number]=' + i,
+      },
       // `scale_teams?filter[filled]=true&filter[cursus_id]=21&filter[campus_id]=29&range[begin_at]=2010-01-01T00:00:00.000Z,2023-02-28T15:00:00.000Z&page[size]=100&page[number]=${i}`,
+      // url: `https://api.intra.42.fr/v2/scale_teams?filter[filled]=true&filter[cursus_id]=21&filter[campus_id]=29&range[begin_at]=2010-01-01T00:00:00.000Z,2023-02-28T15:00:00.000Z&page[size]=100&page[number]=${i}`,
     );
   }
 
-  const { responses, rejected } = await seine.awaitResponses();
-  console.log(responses.length, rejected.length);
+  const seineResult = await seine.awaitResponses();
 
-  let i = 1;
-  await mkdir('./data', { recursive: true });
-  for (const response of responses) {
-    try {
-      const data = await response.json();
-      await writeFile(`./data/${i}.json`, data);
-    } catch {
-      console.error('save fail');
+  if (seineResult.status === 'success') {
+    let i = 1;
+    await mkdir('./data', { recursive: true });
+    for (const response of seineResult.responses) {
+      try {
+        const data = await response.json();
+        await writeFile(`./data/${i}.json`, data);
+      } catch {
+        console.error('save fail');
+      }
+      i++;
     }
-    i++;
   }
 
   const endDate = new Date();

@@ -1,4 +1,4 @@
-import { ApiClientConfig, RateLimitConfig } from '../types/ApiClientConfig.js';
+import { ApiClientConfig, RateLimitConfig } from '../types/Seine.js';
 import { sendRequest } from './sendRequest.js';
 import { Token, TokenDto } from './Token.js';
 
@@ -19,13 +19,12 @@ export class TokenStore {
     };
   }
 
-  public initialize = async (): Promise<void> => {
+  public initialize = async (): Promise<Token> => {
     try {
-      // todo
-      // try to get access token for checking valid client
-      await this.getToken();
+      const tokenPayload = await this.issueToken();
+      this.token = new Token(tokenPayload, this.apiClientConfig);
+      return this.token;
     } catch (e) {
-      // console.error('initialize fail, error:', e);
       throw Error('initialize token store fail');
     }
   };
@@ -38,20 +37,17 @@ export class TokenStore {
     const currToken = this.token;
 
     if (isEmpty(currToken) || currToken.isExpired()) {
-      const tokenPayload = await this.issueToken();
-
-      this.token = new Token(tokenPayload, this.apiClientConfig);
-
-      return this.token;
+      const newToken = await this.initialize();
+      return newToken;
     }
 
     return currToken;
   };
 
   private issueToken = async (): Promise<Readonly<TokenDto>> => {
-    const response = await sendRequest({
-      url: 'oauth/token',
-      init: {
+    const response = await sendRequest(
+      'https://api.intra.42.fr/v2/oauth/token',
+      {
         method: 'POST',
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
@@ -62,7 +58,7 @@ export class TokenStore {
           client_secret: this.apiClientConfig.clientSecret,
         }),
       },
-    });
+    );
 
     const tokenPayload: unknown = await response.json();
     assertIsTokenDto(tokenPayload);

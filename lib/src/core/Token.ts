@@ -1,4 +1,4 @@
-import { RateLimitConfig } from '../types/ApiClientConfig.js';
+import { RateLimitConfig } from '../types/Seine.js';
 import { RateLimiter } from './RateLimiter.js';
 
 export interface TokenDto {
@@ -26,16 +26,24 @@ export class Token {
     // console.log(`token expiresAt: ${new Date(this.expiredAt)}`);
   }
 
-  isExpired = (): boolean => {
+  public isExpired = (): boolean => {
     const currTime = new Date().getTime();
     return currTime >= this.expiredAt;
   };
 
-  isRateLimitReached = (): boolean => {
-    return this.rateLimiter.isLimitReaced();
+  public isAvailable = (): boolean => {
+    return !(this.isHourLimitReached() || this.isSecLimitReached());
   };
 
-  updateAtRequest = (): void => {
+  public isHourLimitReached = (): boolean => {
+    return this.rateLimiter.isHourLimitReached();
+  };
+
+  public isSecLimitReached = (): boolean => {
+    return this.rateLimiter.isSecLimitReached();
+  };
+
+  public updateAtRequest = (): void => {
     this.rateLimiter.updateAtRequest();
   };
 }

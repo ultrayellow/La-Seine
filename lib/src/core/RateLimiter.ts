@@ -1,83 +1,81 @@
-import { RateLimitConfig } from '../types/ApiClientConfig.js';
+import { RateLimitConfig } from '../types/Seine.js';
 
 export class RateLimiter {
   private readonly config: RateLimitConfig;
 
-  private secondlyLimitResetAt: number;
-  private secondlySendCount: number;
-  private hourlyLimtResetAt: number;
-  private hourlySendCount: number;
+  private secondLimitResetAt: number;
+  private secondSendCount: number;
+  private hourLimtResetAt: number;
+  private hourSendCount: number;
 
   constructor(rateLimitConfig: RateLimitConfig) {
     this.config = rateLimitConfig;
 
-    this.secondlyLimitResetAt = 0;
-    this.secondlySendCount = 0;
-    this.hourlyLimtResetAt = 0;
-    this.hourlySendCount = 0;
+    this.secondLimitResetAt = 0;
+    this.secondSendCount = 0;
+    this.hourLimtResetAt = 0;
+    this.hourSendCount = 0;
   }
 
-  public isLimitReaced = (): boolean => {
+  public isHourLimitReached = (): boolean => {
     const currTime = new Date().getTime();
 
-    if (
-      this.hourlySendCount >= this.config.limitPerHour &&
+    return (
+      this.hourSendCount >= this.config.limitPerHour &&
       !this.isNewHour(currTime)
-    ) {
-      return true;
-    }
+    );
+  };
 
-    if (
-      this.secondlySendCount >= this.config.limitPerSec &&
+  public isSecLimitReached = (): boolean => {
+    const currTime = new Date().getTime();
+
+    return (
+      this.secondSendCount >= this.config.limitPerSec &&
       !this.isNewSec(currTime)
-    ) {
-      return true;
-    }
-
-    return false;
+    );
   };
 
   public updateAtRequest = (): void => {
     const currTime = new Date().getTime();
 
     if (this.isNewHour(currTime)) {
-      this.refreshHourlyLimit();
+      this.refreshHourLimit();
     }
 
     if (this.isNewSec(currTime)) {
-      this.refreshSecondlyLimit();
+      this.refreshSecondLimit();
     }
 
-    this.secondlySendCount++;
-    this.hourlySendCount++;
+    this.secondSendCount++;
+    this.hourSendCount++;
   };
 
   private isNewHour = (currTime: number): boolean => {
-    return this.hourlyLimtResetAt < currTime;
+    return this.hourLimtResetAt < currTime;
   };
 
-  private refreshHourlyLimit = (): void => {
-    this.hourlyLimtResetAt = getHourlyLimitResetAt();
-    this.hourlySendCount = 0;
+  private refreshHourLimit = (): void => {
+    this.hourLimtResetAt = getHourLimitResetAt();
+    this.hourSendCount = 0;
   };
 
   private isNewSec = (currTime: number): boolean => {
     // todo
-    return this.secondlyLimitResetAt + 1000 < currTime;
+    return this.secondLimitResetAt + 1000 < currTime;
   };
 
-  private refreshSecondlyLimit = (): void => {
-    this.secondlyLimitResetAt = getSecondlyLimitResetAt();
-    this.secondlySendCount = 0;
+  private refreshSecondLimit = (): void => {
+    this.secondLimitResetAt = getSecondLimitResetAt();
+    this.secondSendCount = 0;
   };
 }
 
-const getHourlyLimitResetAt = (): number => {
+const getHourLimitResetAt = (): number => {
   const currTime = new Date();
   return currTime.setHours(currTime.getHours() + 1, 0, 0, 0);
 };
 
-const getSecondlyLimitResetAt = (): number => {
+const getSecondLimitResetAt = (): number => {
   const currTime = new Date();
   return currTime.setSeconds(currTime.getSeconds() + 1);
 };

@@ -1,22 +1,34 @@
-import { TokenStore } from './TokenStore.js';
+import {
+  SeineAbortError,
+  SeineInternalError,
+  SeineRateLimitError,
+} from '../errors/SeineError.js';
+import { ApiClientConfig, SeineInstance } from '../index.js';
+import { FetchArg, SeineFailedRequest, SeineResult } from '../types/Seine.js';
+import { sleepMs } from './util.js';
 import { sendRequestWithToken } from './sendRequest.js';
-import { sleepMs } from '../util/sleepMs.js';
-import { ApiClientConfig } from '../types/ApiClientConfig.js';
-import { SeineInstance } from '../index.js';
-import { RequestArg, SeineResult } from '../types/Seine.js';
 import { Token } from './Token.js';
+import { TokenStore } from './TokenStore.js';
+import { groupBy } from './util.js';
 
-interface RequestArgWithId extends RequestArg {
-  index: number;
+interface Id {
+  id: number;
 }
+type RequestArg = Id & FetchArg;
+type ResponseSettled = Id & PromiseSettledResult<Response>;
+type ResponseFulfilled = Id & PromiseFulfilledResult<Response>;
+type ResponseRejected = Id & PromiseRejectedResult;
+type RequsetToResponse = (requests: RequestArg[]) => Promise<ResponseSettled[]>;
 
 const REQUEST_CHUNK_SIZE = 20;
+// todo
+// eslint-disable-next-line
 const MAX_TRY_COUNT = 3;
 const MAX_FAIL_LIMIT = 50;
 
 export class Seine implements SeineInstance {
   private readonly tokenStores: TokenStore[];
-  private readonly requestPool: RequestArgWithId[];
+  private readonly requestPool: RequestArg[];
 
   constructor() {
     this.tokenStores = [];
@@ -31,117 +43,98 @@ export class Seine implements SeineInstance {
     }
 
     const tokenStore = new TokenStore(apiClientConfig);
-    await tokenStore.initialize();
-
     this.tokenStores.push(tokenStore);
+
+    try {
+      await tokenStore.initialize();
+    } catch (e) {
+      this.tokenStores.pop();
+      throw e;
+    }
   };
 
-  public addRequest = (url: string, init?: RequestInit): void => {
-    this.requestPool.push({ url, init, index: this.requestPool.length });
+  public addRequest = ({ url, init }: FetchArg): void => {
+    this.requestPool.push({ url, init, id: this.requestPool.length });
   };
 
-  // side effect: clears this.requestPool
+  // todo: test length is correct
   public awaitResponses = async (): Promise<SeineResult> => {
-    const requestPool = this.requestPool.splice(0, this.requestPool.length);
-    const requestChunks = chunkRequests(requestPool);
+    const requests = this.requestPool.splice(0, this.requestPool.length);
 
-    for (const requestChunk of requestChunks) {
-      const responseChunk = await this.requestByChunk(requestChunk);
+    const currResult = await this.flushRequests(requests);
+    if (currResult.status === 'success') {
+      return currResult;
     }
 
-    const resFulfilled: PromiseFulfilledResult<Response>[] = [];
-
-    // for (let i = 0; i < MAX_TRY_COUNT; i++) {
-
-    const currResPromises = await this.requestSingleRun(requestPool);
-    resFulfilled.push(...currResPromises.filter(isFulfilled));
-
-    // if (isRequestAborted(requestPool)) {
-    //   return { ...groupResPromises(resFulfilled), isAborted: true };
-    // }
-
-    // update here
-    // }
-
     return {
-      responses: resFulfilled.map(extractPromiseValue),
-      rejected: currResPromises.filter(isRejected),
-      aborted: requestPool,
-      // todo: 긍정형으로 바꾸기?
-      // todo: 전부 성공했음을 나타내는 플래그?
-      // todo: 보내지 않은 요청들 배열 반환?
-      isAborted: false,
+      status: 'fail',
+      responses: [],
+      failedRequests: [],
     };
   };
 
-  private requestByChunk = (requestChunk: RequestArgWithId[]) => {
-    const responsePromises: Promise<Response>[] = [];
+  private flushRequests = async (
+    requests: RequestArg[],
+  ): Promise<SeineResult> => {
+    const requestChunks = chunkRequests(requests);
 
-    for (const request of requestChunk) {
-      const promise = this.sendRequest(request);
-      if (!promise) {
-      }
-    }
-  };
+    const responsesSettled: ResponseSettled[] = [];
 
-  // todo
-  private sendRequest = async (
-    request: RequestArgWithId,
-  ): Promise<Response | null> => {
-    const token = await this.selectToken();
-    if (!token) {
-      return null;
-    }
+    for (const requestChunk of requestChunks) {
+      const responseChunk = await this.requestByChunk(requestChunk);
+      responsesSettled.push(...responseChunk);
 
-    token.updateAtRequest();
-    const promise = sendRequestWithToken(request, token.accessToken);
-
-    return promise;
-  };
-
-  // todo: request?
-  private requestSingleRun = async (
-    requestPool: RequestArgWithId[],
-  ): Promise<PromiseSettledResult<Response>[]> => {
-    const resPromises: PromiseSettledResult<Response>[] = [];
-
-    for (let i = 0; i < requestPool.length; i += REQUEST_CHUNK_SIZE) {
-      const requests = requestPool.slice(i, REQUEST_CHUNK_SIZE);
-      const currResPromises = await this.sendRequests(requests);
-
-      resPromises.push(...currResPromises);
-
-      if (this.maxFailLimitReached(resPromises)) {
+      if (isAbortCondition(responsesSettled)) {
         break;
       }
     }
 
-    return resPromises;
-  };
-
-  retryRejected = async (
-    requestPool: RequestArgWithId[],
-    results: PromiseSettledResult<Response>[],
-  ): Promise<void> => {
-    const retryIndexes = results.reduce((acc, curr, index) => {
-      if (curr.status === 'rejected') {
-        acc.push(index);
-      }
-
-      return acc;
-    }, Array<number>());
-
-    const retryPromises = await this.sendRequests(
-      retryIndexes.map((curr) => {
-        return requestPool[curr];
-      }),
+    const { fulfilled, rejected } = groupBy(
+      responsesSettled,
+      (response) => response.status,
     );
 
-    const retryResults = retryPromises;
+    if (fulfilled) {
+      assertsResponsesFulfilled(fulfilled);
+    }
 
-    retryIndexes.forEach((retryIndex, index) => {
-      results[retryIndex] = retryResults[index];
-    });
+    if (rejected) {
+      assertsResponsesRejected(rejected);
+    }
+
+    const result = getSeineResult(requests, fulfilled, rejected);
+    return result;
+  };
+
+  private requestByChunk: RequsetToResponse = async (requestChunk) => {
+    const responsePromises: Promise<Response>[] = [];
+
+    for (const request of requestChunk) {
+      try {
+        const token = await this.selectToken();
+        token.updateAtRequest();
+
+        const { url, init } = request;
+        const promise = sendRequestWithToken(token.accessToken, url, init);
+
+        responsePromises.push(promise);
+      } catch (error) {
+        if (error instanceof SeineRateLimitError) {
+          break;
+        }
+
+        // todo: select token error
+        throw error;
+      }
+    }
+
+    const responsesSettled = await Promise.allSettled(responsePromises);
+    const responsesSettledWithId = responsesSettled.map((promise, index) => ({
+      id: requestChunk[index].id,
+      ...promise,
+    }));
+
+    return responsesSettledWithId;
   };
 
   private isDuplicatedApiClient = (
@@ -150,17 +143,18 @@ export class Seine implements SeineInstance {
     const findResult = this.tokenStores.find(
       (curr) => curr.getApiClientId() === apiClientConfig.clientId,
     );
+
     return findResult !== undefined;
   };
 
-  private selectToken = async (): Promise<Token | null> => {
-    // todo
+  private selectToken = async (): Promise<Token> => {
+    // todo define i
     for (let i = 0; i < 10 * 3; i++) {
       for (const tokenStore of this.tokenStores) {
+        // todo: handle error here
         const token = await tokenStore.getToken();
 
-        // todo
-        if (!token.isRateLimitReached()) {
+        if (token.isAvailable()) {
           return token;
         }
       }
@@ -168,68 +162,77 @@ export class Seine implements SeineInstance {
       await sleepMs(100);
     }
 
-    return null;
-  };
-
-  private sendRequests = async (
-    requests: RequestArgWithId[],
-  ): Promise<PromiseSettledResult<Response>[]> => {
-    const promisePool: Promise<Response>[] = [];
-
-    for (const currRequest of requests) {
-      const token = await this.selectToken();
-      if (!token) {
-        break;
-      }
-
-      // todo
-      token.updateAtRequest();
-
-      const promise = sendRequestWithToken(currRequest, token.accessToken);
-
-      promisePool.push(promise);
-    }
-
-    const results = await Promise.allSettled(promisePool);
-    return results;
-  };
-
-  private maxFailLimitReached = <T>(
-    resPromises: PromiseSettledResult<T>[],
-  ): boolean => {
-    return resPromises.filter(isRejected).length >= MAX_FAIL_LIMIT;
+    // todo
+    throw new SeineRateLimitError();
   };
 }
 
-const isRequestAborted = (requestPool: RequestArgWithId[]) => {
-  return requestPool.length;
-};
-
-const isRateLimitReached = (
-  token: Token | Promise<Response> | null,
-): token is null => {
-  return token === null;
-};
-
-// const groupResPromises = (
-//   resPromises: PromiseSettledResult<Response>[],
-// ): Omit<SeineResult, 'isAborted'> => {
-//   return {
-//     responses: resPromises.filter(isFulfilled).map(extractPromiseValue),
-//     rejected: resPromises.filter(isRejected),
-//   };
-// };
-
-const chunkRequests = (
-  requestPool: RequestArgWithId[],
-): Array<RequestArgWithId[]> => {
-  const chunked: Array<RequestArgWithId[]> = [];
+const chunkRequests = (requestPool: RequestArg[]): RequestArg[][] => {
+  const chunked: RequestArg[][] = [];
 
   for (let i = 0; i < requestPool.length; i += REQUEST_CHUNK_SIZE) {
-    chunked.push(requestPool.splice(i, REQUEST_CHUNK_SIZE));
+    chunked.push(requestPool.slice(i, i + REQUEST_CHUNK_SIZE));
   }
 
   return chunked;
+};
+
+const getSeineResult = (
+  requests: RequestArg[],
+  fulfilled?: ResponseFulfilled[],
+  rejected?: ResponseRejected[],
+): SeineResult => {
+  const responses = fulfilled
+    ?.sort((a, b) => a.id - b.id)
+    .map(extractPromiseValue);
+  const failedRequests: SeineFailedRequest[] = [];
+
+  if (fulfilled && fulfilled.length < requests.length) {
+    failedRequests.push(
+      ...requests
+        .slice(fulfilled.length, requests.length)
+        .map((request) => ({ ...request, reason: new SeineAbortError() })),
+    );
+  }
+
+  if (rejected) {
+    failedRequests.push(
+      ...rejected.map(({ id, reason }) => ({ ...requests[id], reason })),
+    );
+  }
+
+  if (responses && failedRequests.length === 0) {
+    return {
+      status: 'success',
+      responses,
+    };
+  }
+
+  return {
+    status: 'fail',
+    responses,
+    failedRequests: failedRequests,
+  };
+};
+
+const isAbortCondition = (responseSettled: ResponseSettled[]): boolean => {
+  return (
+    responseSettled.find(isHourLimitReached) !== undefined ||
+    maxFailLimitReached(responseSettled)
+  );
+};
+
+const isHourLimitReached = (response: ResponseSettled): boolean => {
+  return (
+    response.status === 'rejected' &&
+    response.reason instanceof SeineRateLimitError
+  );
+};
+
+const maxFailLimitReached = <T>(
+  resPromises: PromiseSettledResult<T>[],
+): boolean => {
+  return resPromises.filter(isRejected).length >= MAX_FAIL_LIMIT;
 };
 
 const isFulfilled = <T>(
@@ -238,14 +241,30 @@ const isFulfilled = <T>(
   return result.status === 'fulfilled';
 };
 
-const extractPromiseValue = <T>(
-  fulfilledResponsePromise: PromiseFulfilledResult<T>,
-): T => {
-  return fulfilledResponsePromise.value;
-};
+function assertsResponsesFulfilled(
+  results: ResponseSettled[],
+): asserts results is ResponseFulfilled[] {
+  if (results.find(isRejected)) {
+    throw new SeineInternalError();
+  }
+}
 
 const isRejected = <T>(
   result: PromiseSettledResult<T>,
 ): result is PromiseRejectedResult => {
   return result.status === 'rejected';
+};
+
+function assertsResponsesRejected(
+  results: ResponseSettled[],
+): asserts results is ResponseRejected[] {
+  if (results.find(isFulfilled)) {
+    throw new SeineInternalError();
+  }
+}
+
+const extractPromiseValue = <T>(
+  fulfilledPromise: PromiseFulfilledResult<T>,
+): T => {
+  return fulfilledPromise.value;
 };
