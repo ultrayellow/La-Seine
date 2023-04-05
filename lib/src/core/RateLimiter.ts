@@ -1,5 +1,11 @@
 import { RateLimitConfig } from '../types/Seine.js';
 
+/**
+ *
+ * @description
+ * Manages Tokens rate limit
+ *
+ */
 export class RateLimiter {
   private readonly config: RateLimitConfig;
 

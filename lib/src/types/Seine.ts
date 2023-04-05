@@ -4,13 +4,14 @@
 //   readonly verbose: boolean;
 // }
 
+import { SeineError } from '../errors/SeineError.js';
+
 export interface RateLimitConfig {
   readonly limitPerSec: number;
   readonly limitPerHour: number;
 }
 
 export interface ApiClientConfig extends Partial<RateLimitConfig> {
-  readonly clientName: string;
   readonly clientId: string;
   readonly clientSecret: string;
 }
@@ -23,7 +24,7 @@ export interface FetchArg {
 export interface SeineFailedRequest {
   readonly url: RequestInfo | URL;
   readonly init?: RequestInit;
-  readonly reason: unknown;
+  readonly error: SeineError;
 }
 
 export interface SeineSuccess {
@@ -40,29 +41,103 @@ export interface SeineFail {
 export type SeineResult = SeineSuccess | SeineFail;
 
 export interface SeineInstance {
-  readonly addApiClient: (apiClientConfig: ApiClientConfig) => Promise<void>;
-
   /**
    *
-   * @param fecthArg
+   * @param apiClientConfig
    * ```ts
-   * { url: RequestInfo | URL, init?: RequestInit }
+   * {
+   *   clientId: string;
+   *   clientSecret: string;
+   * }
    * ```
+   *
+   * @returns nothing
+   *
    * @example
    * ```ts
    * import seine from 'seine';
    *
-   * const apiClientConfig = SeineUtil.generateFtClient()
+   * const apiClientConfig = SeineUtil.generateFtClient();
+   * seine.addApiClient(apiClientConfig);
+   * ```
+   */
+  readonly addApiClient: (apiClientConfig: ApiClientConfig) => Promise<void>;
+
+  /**
    *
-   * seine.addCient(SeineClientBuilder)
+   * @description
+   * Adds request to seine instance without sending request. By calling
+   * ```getResult```, user can send requests and get result of it.
+   *
+   * @param fecthArg
+   * ```ts
+   * {
+   *   url: RequestInfo | URL,
+   *   init?: RequestInit
+   * }
+   * ```
+   *
+   * @returns nothing
+   *
+   * @example
+   * ```ts
+   * import seine from 'seine';
+   *
+   * const apiClientConfig = SeineUtil.generateFtClient();
+   * seine.addApiClient(apiClientConfig);
    *
    * for (let i = 0; i < 10; i++) {
-   *  seine.addRequest({ `https://api.intra.42.fr/v2/users?page[number]=${i}`})
+   *  seine.addRequest({ `https://api.intra.42.fr/v2/users?page[number]=${i}`});
    * }
    *
-   * const result = await seine.awaitResponses()
+   * const result = await seine.getResult();
+   *
    * ```
    */
   readonly addRequest: (fecthArg: FetchArg) => void;
-  readonly awaitResponses: () => Promise<SeineResult>;
+
+  /**
+   *
+   * @description
+   * Sends requests in seine instance, returns result of it.
+   *
+   * @returns Upon successfully complete all requests, returns ```SeineSuccess```.
+   * Otherwise, returns ```SeineFail```.
+   *
+   * @example
+   * ```ts
+   * import seine from 'seine';
+   *
+   * const apiClientConfig = SeineUtil.generateFtClient();
+   * seine.addApiClient(apiClientConfig);
+   *
+   * for (let i = 0; i < 10; i++) {
+   *   seine.addRequest({ `https://api.intra.42.fr/v2/users?page[number]=${i}`});
+   * }
+   *
+   * const result = await getResult();
+   *
+   * if (result.status === 'success') {
+   *   // now result narrowed to SeineSuccess.
+   *   for (const response of result.responses) {
+   *     const data = await response.json();
+   *     console.log(data);
+   *   }
+   * } else {
+   *   // result is SeineFail.
+   *   if (result.responses) {
+   *     // handle successful responses.
+   *   }
+   *
+   *   for (const { url, init, error } of result.failedRequests) {
+   *     if (error.cause === 'rateLimit') {
+   *       seine.addRequest({ url, init });
+   *     }
+   *   }
+   *
+   *   const retryResult = await getResult();
+   * }
+   * ```
+   */
+  readonly getResult: () => Promise<SeineResult>;
 }

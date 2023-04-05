@@ -1,32 +1,68 @@
-export class SeineRateLimitError extends Error {
-  readonly reason = 'ratelimit';
+export type SeineErrorCause =
+  | 'rateLimit'
+  | 'aborted'
+  | 'seineInternal'
+  | 'notFound'
+  | 'noPermission'
+  | 'fetchError'
+  | 'ftIntraError';
 
-  constructor() {
-    super('SeineError');
+export abstract class SeineErrorBase extends Error {
+  readonly cause: SeineErrorCause;
+
+  constructor(message: string, cause: SeineErrorCause) {
+    super(message);
+    this.cause = cause;
   }
 }
 
-export class SeineAbortError extends Error {
-  readonly reason = 'aborted';
-
+export class SeineRateLimitError extends SeineErrorBase {
   constructor() {
-    super('SeineError');
+    super('Rate Limit Reached.', 'rateLimit');
   }
 }
 
-export class SeineInternalError extends Error {
-  readonly reason = 'SeineInternal';
-
+export class SeineAbortError extends SeineErrorBase {
   constructor() {
-    super('SeineError');
+    super('Aborted before Request.', 'aborted');
   }
 }
 
-/*
+export class SeineInternalError extends SeineErrorBase {
+  constructor() {
+    super('Seine Internal Error.', 'seineInternal');
+  }
+}
 
-1. fetch network error
-2. fetch status error (401, 403, 404, 429, 500 >=)
-3. hourly limit
-4. too much fail
+export class SeineNotFoundError extends SeineErrorBase {
+  constructor() {
+    super('Invalid Url of Request.', 'notFound');
+  }
+}
 
-*/
+export class SeineNoPermissionError extends SeineErrorBase {
+  constructor() {
+    super('Need higher level of permission to do this.', 'noPermission');
+  }
+}
+
+export class SeineFetchError extends SeineErrorBase {
+  constructor() {
+    super('Fetch failed.', 'fetchError');
+  }
+}
+
+export class SeineFtIntraError extends SeineErrorBase {
+  constructor() {
+    super('42 Intra is down.', 'ftIntraError');
+  }
+}
+
+export type SeineError =
+  | SeineRateLimitError
+  | SeineAbortError
+  | SeineInternalError
+  | SeineNotFoundError
+  | SeineNoPermissionError
+  | SeineFetchError
+  | SeineFtIntraError;

@@ -7,7 +7,6 @@ dotenv.config();
 
 const getApiClientConfig = (): ApiClientConfig => {
   const envValues = {
-    clientName: process.env.CLIENT_NAME,
     clientId: process.env.CLIENT_ID,
     clientSecret: process.env.CLIENT_SECRET,
     rateLimitPerSec: 2,
@@ -24,7 +23,7 @@ const getApiClientConfig = (): ApiClientConfig => {
 function assertHasEnv(
   envValues: Partial<ApiClientConfig>,
 ): asserts envValues is ApiClientConfig {
-  if (!(envValues.clientId && envValues.clientName && envValues.clientSecret)) {
+  if (!(envValues.clientId && envValues.clientSecret)) {
     throw Error('env not exist');
   }
 }
@@ -44,7 +43,15 @@ const main = async (): Promise<void> => {
     );
   }
 
-  const seineResult = await seine.awaitResponses();
+  const seineResult = await seine.getResult();
+
+  if (seineResult.status === 'fail') {
+    for (const { url, init, error: reason } of seineResult.failedRequests) {
+      if (reason.cause === 'aborted' || reason.cause === 'rateLimit') {
+        seine.addRequest({ url, init });
+      }
+    }
+  }
 
   if (seineResult.status === 'success') {
     let i = 1;

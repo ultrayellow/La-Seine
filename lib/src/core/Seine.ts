@@ -1,4 +1,5 @@
 import {
+  SeineErrorBase,
   SeineAbortError,
   SeineInternalError,
   SeineRateLimitError,
@@ -53,31 +54,34 @@ export class Seine implements SeineInstance {
     }
   };
 
-  /**
-   *
-   * Only add request to this.requestPool with id (index) for sorting on return.
-   * Calling this function doesn't send request.
-   */
   public addRequest = ({ url, init }: FetchArg): void => {
     this.requestPool.push({ url, init, id: this.requestPool.length });
   };
 
   // todo: test length is correct
-  public awaitResponses = async (): Promise<SeineResult> => {
+  // todo: when request pool is empty. currently returns fail with empty arrays.
+  // todo: retry logic
+  public getResult = async (): Promise<SeineResult> => {
     const requests = this.requestPool.splice(0, this.requestPool.length);
 
     const currResult = await this.flushRequests(requests);
-    if (currResult.status === 'success') {
-      return currResult;
-    }
 
-    return {
-      status: 'fail',
-      responses: [],
-      failedRequests: [],
-    };
+    return currResult;
   };
 
+  /**
+   *
+   * @description
+   * To prevent spamming too many requests in short time, Seine sends requests
+   * by chunk and await responses of it. This can also prevent unnecessarilly
+   * sending requests. (e.g. Hour rate limit reached, Too many fails occurred.)
+   *
+   * @param requests
+   *
+   * @returns Upon successfully complete all requests, returns ```SeineSuccess```.
+   * Otherwise, returns ```SeineFail```.
+   *
+   */
   private flushRequests = async (
     requests: RequestArg[],
   ): Promise<SeineResult> => {
@@ -94,23 +98,30 @@ export class Seine implements SeineInstance {
       }
     }
 
-    const { fulfilled, rejected } = groupBy(
-      responsesSettled,
-      (response) => response.status,
-    );
-
-    if (fulfilled) {
-      assertsResponsesFulfilled(fulfilled);
-    }
-
-    if (rejected) {
-      assertsResponsesRejected(rejected);
-    }
-
-    const result = getSeineResult(requests, fulfilled, rejected);
+    const result = generateSeineResult(requests, responsesSettled);
     return result;
   };
 
+  /**
+   *
+   * @description
+   * Wrapper function of request logic. Selects available Token and updates
+   * Token's rate limit status. If no Token is available, Seine stops sending
+   * requests and treats pending requests is aborted.
+   *
+   * @param requestChunk
+   *
+   * @returns ```Promise<Response>```.
+   *
+   * @example
+   * ```ts
+   * const requestChunks = chunkRequests(requests);
+   *
+   * for (const requestChunk of requestChunks) {
+   *   const responseChunk = await this.requestByChunk(requestChunk);
+   * }
+   * ```
+   */
   private requestByChunk: RequsetToResponse = async (requestChunk) => {
     const responsePromises: Promise<Response>[] = [];
 
@@ -152,6 +163,17 @@ export class Seine implements SeineInstance {
     return findResult !== undefined;
   };
 
+  /**
+   *
+   * @description
+   * Tries to find available Token in Seine. If no Token is available, wait for
+   * Token's second rate limit refresh, and try again. Although enough time has
+   * passed and still Seine doesn't have any available Token, Treats all Tokens
+   * has reached to hour rate limit and abort request.
+   *
+   * @returns If Seine has available token, returns ```Token```.
+   * Otherwise, throws ```SeineRateLimitError```.
+   */
   private selectToken = async (): Promise<Token> => {
     // todo define i
     for (let i = 0; i < 10 * 3; i++) {
@@ -172,37 +194,86 @@ export class Seine implements SeineInstance {
   };
 }
 
-const chunkRequests = (requestPool: RequestArg[]): RequestArg[][] => {
+/**
+ *
+ * @param requests
+ *
+ * @returns Requests chunked by ```REQUEST_CHUNK_SIZE```.
+ *
+ * @example
+ * ```ts
+ * const requestChunks = chunkRequests(requests);
+ *
+ * for (const requestChunk of requestChunks) {
+ *   const responseChunk = await this.requestByChunk(requestChunk);
+ * }
+ * ```
+ */
+const chunkRequests = (requests: RequestArg[]): RequestArg[][] => {
   const chunked: RequestArg[][] = [];
 
-  for (let i = 0; i < requestPool.length; i += REQUEST_CHUNK_SIZE) {
-    chunked.push(requestPool.slice(i, i + REQUEST_CHUNK_SIZE));
+  for (let i = 0; i < requests.length; i += REQUEST_CHUNK_SIZE) {
+    chunked.push(requests.slice(i, i + REQUEST_CHUNK_SIZE));
   }
 
   return chunked;
 };
 
-const getSeineResult = (
+// todo: id disappears in generated result, which should exist for retry...
+/**
+ *
+ * @description
+ * Extract responses from fulfilled promises, failedRequests from rejected
+ * promises and pending requests.
+ *
+ * @param requests Original requests for abort pending requests.
+ * @param responsesSettled Responses of sent requests either success or fail.
+ *
+ * @returns Upon successfully complete all requests, returns ```SeineSuccess```.
+ * Otherwise, returns ```SeineFail```.
+ */
+const generateSeineResult = (
   requests: RequestArg[],
-  fulfilled?: ResponseFulfilled[],
-  rejected?: ResponseRejected[],
+  responsesSettled: ResponseSettled[],
 ): SeineResult => {
+  const { fulfilled, rejected } = groupBy(
+    responsesSettled,
+    (response) => response.status,
+  );
+
+  // groupBy can't narrow types.
+
+  if (fulfilled) {
+    assertsResponsesFulfilled(fulfilled);
+  }
+
+  if (rejected) {
+    assertsResponsesRejected(rejected);
+  }
+
   const responses = fulfilled
     ?.sort((a, b) => a.id - b.id)
     .map(extractPromiseValue);
+
   const failedRequests: SeineFailedRequest[] = [];
 
-  if (fulfilled && fulfilled.length < requests.length) {
+  if (responsesSettled.length < requests.length) {
     failedRequests.push(
       ...requests
-        .slice(fulfilled.length, requests.length)
-        .map((request) => ({ ...request, reason: new SeineAbortError() })),
+        .slice(responsesSettled.length, requests.length)
+        .map((request) => ({ ...request, error: new SeineAbortError() })),
     );
   }
 
   if (rejected) {
     failedRequests.push(
-      ...rejected.map(({ id, reason }) => ({ ...requests[id], reason })),
+      ...rejected.map(({ id, reason }) => {
+        if (reason instanceof SeineErrorBase) {
+          return { ...requests[id], error: reason };
+        }
+
+        return { ...requests[id], error: new SeineInternalError() };
+      }),
     );
   }
 
