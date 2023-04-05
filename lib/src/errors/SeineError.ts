@@ -1,4 +1,5 @@
 export type SeineErrorCause =
+  | 'invalidClient'
   | 'rateLimit'
   | 'aborted'
   | 'seineInternal'
@@ -16,6 +17,12 @@ export abstract class SeineErrorBase extends Error {
   }
 }
 
+export class SeineInvalidApiClientError extends SeineErrorBase {
+  constructor() {
+    super('Invalid Client Provided', 'invalidClient');
+  }
+}
+
 export class SeineRateLimitError extends SeineErrorBase {
   constructor() {
     super('Rate Limit Reached.', 'rateLimit');
@@ -29,8 +36,8 @@ export class SeineAbortError extends SeineErrorBase {
 }
 
 export class SeineInternalError extends SeineErrorBase {
-  constructor() {
-    super('Seine Internal Error.', 'seineInternal');
+  constructor(message?: string) {
+    super(message ?? 'Seine Internal Error.', 'seineInternal');
   }
 }
 

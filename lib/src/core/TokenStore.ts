@@ -1,3 +1,4 @@
+import { SeineInternalError } from '../errors/SeineError.js';
 import { ApiClientConfig, RateLimitConfig } from '../types/Seine.js';
 import { sendRequest } from './sendRequest.js';
 import { Token, TokenDto } from './Token.js';
@@ -63,9 +64,6 @@ export class TokenStore {
     const tokenPayload: unknown = await response.json();
     assertIsTokenDto(tokenPayload);
 
-    // todo: verbose
-    // console.log(`token issued: ${tokenPayload.access_token}`);
-
     return tokenPayload;
   };
 }
@@ -85,7 +83,7 @@ function assertIsTokenDto(
     return;
   }
 
-  throw Error('library outdated');
+  throw new SeineInternalError('Seine is outdated.');
 }
 
 const isEmpty = (token: Token | null): token is null => {

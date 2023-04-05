@@ -19,7 +19,10 @@ type RequestArg = Id & FetchArg;
 type ResponseSettled = Id & PromiseSettledResult<Response>;
 type ResponseFulfilled = Id & PromiseFulfilledResult<Response>;
 type ResponseRejected = Id & PromiseRejectedResult;
-type RequsetToResponse = (requests: RequestArg[]) => Promise<ResponseSettled[]>;
+
+type RequsetToResponseFn = (
+  requests: RequestArg[],
+) => Promise<ResponseSettled[]>;
 
 const REQUEST_CHUNK_SIZE = 20;
 // todo
@@ -122,7 +125,7 @@ export class Seine implements SeineInstance {
    * }
    * ```
    */
-  private requestByChunk: RequsetToResponse = async (requestChunk) => {
+  private requestByChunk: RequsetToResponseFn = async (requestChunk) => {
     const responsePromises: Promise<Response>[] = [];
 
     for (const request of requestChunk) {
