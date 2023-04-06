@@ -105,3 +105,4 @@ dist
 
 .pnpm-store
 data
+.DS_Store
