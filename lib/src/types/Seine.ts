@@ -4,7 +4,7 @@
 //   readonly verbose: boolean;
 // }
 
-import { SeineError } from '../errors/SeineError.js';
+import type { SeineError } from '../errors/SeineError.js';
 
 export interface RateLimitConfig {
   readonly limitPerSec: number;
@@ -51,8 +51,6 @@ export interface SeineInstance {
    * }
    * ```
    *
-   * @returns nothing
-   *
    * @example
    * ```ts
    * import seine from 'seine';
@@ -76,8 +74,6 @@ export interface SeineInstance {
    *   init?: RequestInit
    * }
    * ```
-   *
-   * @returns nothing
    *
    * @example
    * ```ts

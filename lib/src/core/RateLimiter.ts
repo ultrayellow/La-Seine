@@ -1,4 +1,4 @@
-import { RateLimitConfig } from '../types/Seine.js';
+import type { RateLimitConfig } from '../types/Seine.js';
 
 /**
  *
@@ -23,6 +23,11 @@ export class RateLimiter {
     this.hourSendCount = 0;
   }
 
+  public isBusy = (): boolean => {
+    return this.isHourLimitReached() || this.isSecLimitReached();
+  };
+
+  // todo: check private
   public isHourLimitReached = (): boolean => {
     const currTime = new Date().getTime();
 
@@ -56,6 +61,7 @@ export class RateLimiter {
     this.hourSendCount++;
   };
 
+  // todo: move to outside
   private isNewHour = (currTime: number): boolean => {
     return this.hourLimtResetAt < currTime;
   };

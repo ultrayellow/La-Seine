@@ -32,6 +32,12 @@ const main = async (): Promise<void> => {
   const startDate = new Date();
 
   await seine.addApiClient(getApiClientConfig());
+  await seine.addApiClient({
+    clientId:
+      'u-s4t2ud-6f16e7b0e6f41839e10f33c91a863bb3737c46a28af0270c038fb59ca03af361',
+    clientSecret:
+      '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',
+  });
 
   for (let i = 1; i <= 100; i++) {
     seine.addRequest(

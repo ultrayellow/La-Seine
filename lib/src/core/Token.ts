@@ -1,5 +1,7 @@
-import { RateLimitConfig } from '../types/Seine.js';
+import { SeineInternalError } from '../errors/SeineError.js';
+import type { ApiClientConfig, RateLimitConfig } from '../types/Seine.js';
 import { RateLimiter } from './RateLimiter.js';
+import { request, requestWithToken } from './request.js';
 
 export interface TokenDto {
   readonly access_token: string;
@@ -9,8 +11,9 @@ export interface TokenDto {
   readonly created_at: number;
 }
 
+// todo: scope support
 export class Token {
-  readonly accessToken: string;
+  private readonly accessToken: string;
   // eslint-disable-next-line
   private readonly createdAt: number;
   private readonly expiredAt: number;
@@ -21,31 +24,67 @@ export class Token {
     this.createdAt = tokenDto.created_at;
     this.expiredAt = getExpiredDate(tokenDto.expires_in);
     this.rateLimiter = new RateLimiter(rateLimitConfig);
-
-    // todo
-    // console.log(`token expiresAt: ${new Date(this.expiredAt)}`);
   }
+
+  public request: typeof fetch = async (url, init) => {
+    this.updateAtRequest();
+
+    const response = await requestWithToken(this.accessToken, url, init);
+    return response;
+  };
 
   public isExpired = (): boolean => {
     const currTime = new Date().getTime();
     return currTime >= this.expiredAt;
   };
 
-  public isAvailable = (): boolean => {
-    return !(this.isHourLimitReached() || this.isSecLimitReached());
+  public isBusy = (): boolean => {
+    return this.rateLimiter.isBusy();
   };
 
-  public isHourLimitReached = (): boolean => {
-    return this.rateLimiter.isHourLimitReached();
-  };
-
-  public isSecLimitReached = (): boolean => {
-    return this.rateLimiter.isSecLimitReached();
-  };
-
-  public updateAtRequest = (): void => {
+  private updateAtRequest = (): void => {
     this.rateLimiter.updateAtRequest();
   };
+}
+
+export const issueToken = async (
+  apiClientConfig: Required<ApiClientConfig>,
+): Promise<Token> => {
+  const response = await request('https://api.intra.42.fr/v2/oauth/token', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: apiClientConfig.clientId,
+      client_secret: apiClientConfig.clientSecret,
+    }),
+  });
+
+  const tokenPayload: unknown = await response.json();
+  assertIsTokenDto(tokenPayload);
+
+  const token = new Token(tokenPayload, apiClientConfig);
+  return token;
+};
+
+function assertIsTokenDto(
+  tokenPayload: unknown,
+): asserts tokenPayload is TokenDto {
+  if (
+    typeof tokenPayload === 'object' &&
+    tokenPayload &&
+    'access_token' in tokenPayload &&
+    'token_type' in tokenPayload &&
+    'expires_in' in tokenPayload &&
+    'scope' in tokenPayload &&
+    'created_at' in tokenPayload
+  ) {
+    return;
+  }
+
+  throw new SeineInternalError('Seine is outdated.');
 }
 
 const getExpiredDate = (expiresIn: number): number => {

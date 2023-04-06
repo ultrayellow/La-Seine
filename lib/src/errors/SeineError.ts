@@ -1,5 +1,8 @@
 export type SeineErrorCause =
   | 'invalidClient'
+  | 'badRequest'
+  | 'unauthorized'
+  | 'tooManyRequests'
   | 'rateLimit'
   | 'aborted'
   | 'seineInternal'
@@ -20,6 +23,24 @@ export abstract class SeineErrorBase extends Error {
 export class SeineInvalidApiClientError extends SeineErrorBase {
   constructor() {
     super('Invalid Client Provided', 'invalidClient');
+  }
+}
+
+export class SeineBadRequestError extends SeineErrorBase {
+  constructor() {
+    super('Bad request', 'badRequest');
+  }
+}
+
+export class SeineUnauthorizedError extends SeineErrorBase {
+  constructor() {
+    super('Unauthorized', 'unauthorized');
+  }
+}
+
+export class SeineTooManyRequestsError extends SeineErrorBase {
+  constructor() {
+    super('Too many requests', 'tooManyRequests');
   }
 }
 
@@ -67,6 +88,7 @@ export class SeineFtIntraError extends SeineErrorBase {
 
 export type SeineError =
   | SeineRateLimitError
+  | SeineTooManyRequestsError
   | SeineAbortError
   | SeineInternalError
   | SeineNotFoundError
