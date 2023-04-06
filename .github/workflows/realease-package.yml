@@ -16,8 +16,8 @@ jobs:
         with:
           node-version: 16
 
-      - uses: pnpm/action-setup@v2
-        name: Install pnpm
+      - name: pnpm/action-setup@v2
+        uses: Install pnpm
         id: pnpm-install
         with:
           version: 7
@@ -40,7 +40,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - run: pnpm test
+      - name: Check Lint
+        run: pnpm run lint:peek
+
+      - name: Run tests
+        run: pnpm test
 
   publish:
     needs: build
