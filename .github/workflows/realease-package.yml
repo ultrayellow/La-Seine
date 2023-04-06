@@ -16,8 +16,8 @@ jobs:
         with:
           node-version: 16
 
-      - name: pnpm/action-setup@v2
-        uses: Install pnpm
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
         id: pnpm-install
         with:
           version: 7
@@ -58,8 +58,8 @@ jobs:
         with:
           node-version: 16
           registry-url: https://registry.npmjs.org
-      - uses: pnpm/action-setup@v2
-        name: Install pnpm
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
         id: pnpm-install
         with:
           version: 7
