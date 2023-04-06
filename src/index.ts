@@ -6,10 +6,11 @@ const seine: SeineInstance = new Seine(new ApiClientStore());
 
 export default seine;
 export type {
+  RateLimitConfig,
   ApiClientConfig,
-  FetchArg,
+  SeineFailedRequest,
   SeineFail,
-  SeineInstance,
-  SeineResult,
   SeineSuccess,
+  SeineResult,
+  SeineInstance,
 } from './types/Seine.js';

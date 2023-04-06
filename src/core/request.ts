@@ -33,7 +33,7 @@ export const requestWithToken = (
   return responseData;
 };
 
-const assertsStatusOk = (status: number) => {
+const assertsStatusOk = (status: number): void => {
   if (status === 400) {
     throw new SeineBadRequestError();
   }

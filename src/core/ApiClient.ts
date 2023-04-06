@@ -1,4 +1,5 @@
 import type { ApiClientConfig } from '../types/Seine.js';
+// eslint-disable-next-line
 import type { ApiClientStore } from './ApiClientStore.js';
 import { issueToken, Token } from './Token.js';
 
@@ -22,7 +23,7 @@ export class ApiClient {
     return this.token;
   };
 
-  get id() {
+  get id(): string {
     return this.config.clientId;
   }
 }

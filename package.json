@@ -1,11 +1,21 @@
 {
-  "name": "seine",
+  "name": "la-seine",
   "version": "0.0.1",
-  "description": "",
+  "description": "Simple api request library with rate limit management.",
+  "repository": "ultrayellow/Seine",
+  "author": {
+    "name": "jaham",
+    "email": "jpham0005@gmail.com",
+    "url": "https://github.com/jpham005"
+  },
+  "license": "MIT",
   "private": false,
-  "main": "index.js",
   "type": "module",
-  "types": "./dist/*.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "pnpm run build && pnpm run start",
     "build": "tsc",
@@ -15,9 +25,15 @@
     "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix --cache",
     "lint:peek": "eslint \"{src,apps,libs,test}/**/*.ts\" --cache"
   },
-  "keywords": [],
-  "author": "jaham",
-  "license": "MIT",
+  "keywords": [
+    "42",
+    "ft",
+    "api",
+    "request",
+    "v2",
+    "rate",
+    "limit"
+  ],
   "devDependencies": {
     "@types/node": "^18.15.5",
     "@typescript-eslint/eslint-plugin": "^5.57.0",
@@ -27,9 +43,5 @@
     "eslint-plugin-prettier": "^4.2.1",
     "prettier": "^2.8.7",
     "typescript": "^5.0.2"
-  },
-  "dependencies": {
-    "dotenv": "^16.0.3",
-    "zod": "^3.21.4"
   }
 }

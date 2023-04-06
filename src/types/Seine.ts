@@ -67,14 +67,6 @@ export interface SeineInstance {
    * Adds request to seine instance without sending request. By calling
    * ```getResult```, user can send requests and get result of it.
    *
-   * @param fecthArg
-   * ```ts
-   * {
-   *   url: RequestInfo | URL,
-   *   init?: RequestInit
-   * }
-   * ```
-   *
    * @example
    * ```ts
    * import seine from 'seine';
@@ -90,7 +82,7 @@ export interface SeineInstance {
    *
    * ```
    */
-  readonly addRequest: (fecthArg: FetchArg) => void;
+  readonly addRequest: (url: RequestInfo | URL, init?: RequestInit) => void;
 
   /**
    *

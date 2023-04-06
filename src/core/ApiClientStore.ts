@@ -1,6 +1,7 @@
 import { SeineRateLimitError } from '../errors/SeineError.js';
 import type { ApiClientConfig, RateLimitConfig } from '../types/Seine.js';
 import { ApiClient } from './ApiClient.js';
+// eslint-disable-next-line
 import type { Seine } from './Seine.js';
 import { issueToken, Token } from './Token.js';
 import { sleepMs } from './util.js';

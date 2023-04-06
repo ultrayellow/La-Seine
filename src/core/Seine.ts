@@ -10,7 +10,9 @@ import type { ApiClientStore } from './ApiClientStore.js';
 import * as helper from './Seine.helper.js';
 import { groupBy } from './util.js';
 
-type Id = { id: number };
+interface Id {
+  id: number;
+}
 export type RequestArg = Id & FetchArg;
 export type ResponseSettled = Id & PromiseSettledResult<Response>;
 export type ResponseFulfilled = Id & PromiseFulfilledResult<Response>;
@@ -43,7 +45,7 @@ export class Seine implements SeineInstance {
     await this.apiClientStore.addClient(apiClientConfig);
   };
 
-  public addRequest = ({ url, init }: FetchArg): void => {
+  public addRequest = ( url: RequestInfo | URL, init?: RequestInit): void => {
     this.requestPool.push({ url, init, id: this.requestPool.length });
   };
 

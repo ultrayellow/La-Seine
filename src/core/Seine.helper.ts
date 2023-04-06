@@ -7,6 +7,7 @@ import type {
   ResponseFulfilled,
   ResponseRejected,
   ResponseSettled,
+  // eslint-disable-next-line
   Seine,
 } from './Seine.js';
 
