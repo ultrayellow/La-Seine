@@ -5,7 +5,11 @@ Simple 42 api request library with rate limit management.
 ## Install
 
 ```
-npm i seine
+npm i la-seine
+```
+
+```
+pnpm add la-seine
 ```
 
 ## Usage
