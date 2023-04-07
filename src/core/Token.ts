@@ -2,6 +2,8 @@ import { SeineInternalError } from '../errors/SeineError.js';
 import type { ApiClientConfig, RateLimitConfig } from '../types/Seine.js';
 import { RateLimiter } from './RateLimiter.js';
 import { request, requestWithToken } from './request.js';
+// eslint-disable-next-line
+import type { Seine } from './Seine.js';
 
 export interface TokenDto {
   readonly access_token: string;
@@ -26,10 +28,14 @@ export class Token {
     this.rateLimiter = new RateLimiter(rateLimitConfig);
   }
 
-  public request: typeof fetch = async (url, init) => {
+  /**
+   *
+   * @see Seine.requestByChunk
+   */
+  public request: typeof fetch = (url, init) => {
     this.updateAtRequest();
 
-    const response = await requestWithToken(this.accessToken, url, init);
+    const response = requestWithToken(this.accessToken, url, init);
     return response;
   };
 
