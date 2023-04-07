@@ -96,7 +96,7 @@ const seineRequestExample = async () => {
 
     // Log for failed requests.
     for (const failedRequest of result.failedRequests) {
-      console.log(failedRequest.url);
+      console.log(failedRequest.url, failedRequest.error);
     }
   }
 };

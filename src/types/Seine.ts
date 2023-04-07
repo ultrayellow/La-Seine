@@ -50,7 +50,7 @@ export interface SeineInstance {
    *   clientSecret: string;
    * }
    * ```
-   * 
+   *
    * @throws
    * If api client config is invalid, or add duplicated client, throws an Error.
    *
