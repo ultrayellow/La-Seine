@@ -9,7 +9,6 @@ Simple 42 api async request library with rate limit management.
 Some of 42 api endpoints are very slow. For example, '/scale_teams' endpoint needs more than 10 seconds in one request!<br/>
 So, if you send requests synchronously, it'll take incredibly long time.
 
----
 ```mermaid
 ---
 title: Synchronous Request
@@ -18,11 +17,9 @@ flowchart LR
   R1[Send First Request] --> W1[Wait First Response] --> R2[Send Second Request] --> W2[Wait Second Response] --> R3[Send Third Request] --> W3[Wait Thrid Response]
 
 ```
----
 Let's assume that single request - response takse 10 seconds.<br/>
 Above example, you'll need to wait more than 30 seconds. But if you send requests asynchronously, you can save much time.
 
----
 ```mermaid
 ---
 title: Asynchronous Request
@@ -31,7 +28,6 @@ flowchart LR
   R1[Send First Request] --> R2[Send Second Request] --> R3[Send Third Request] --> W[Wait All Responses]
 
 ```
----
 With asynchronous approach, you just need to wait about 10 seconds!
 
 ### Rate Limit Management
