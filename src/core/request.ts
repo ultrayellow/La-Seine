@@ -6,6 +6,8 @@ import {
   SeineTooManyRequestsError,
   SeineUnauthorizedError,
 } from '../errors/SeineError.js';
+// eslint-disable-next-line
+import type { Token } from './Token.js';
 
 export const request: typeof fetch = async (url, init) => {
   // todo
@@ -17,6 +19,10 @@ export const request: typeof fetch = async (url, init) => {
   return response;
 };
 
+/**
+ *
+ * @see Token.request
+ */
 export const requestWithToken = (
   accessToken: string,
   url: RequestInfo | URL,
