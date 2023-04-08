@@ -1,7 +1,12 @@
 import { SeineInternalError } from '../errors/SeineError.js';
 import type { ApiClientConfig, RateLimitConfig } from '../types/Seine.js';
 import { RateLimiter } from './RateLimiter.js';
-import { request, requestWithToken } from './request.js';
+import {
+  assertsFetchSuccess,
+  assertsOkStatus,
+  request,
+  requestWithToken,
+} from './request.js';
 // eslint-disable-next-line
 import type { Seine } from './Seine.js';
 
@@ -32,7 +37,10 @@ export class Token {
    *
    * @see Seine.requestByChunk
    */
-  public request: typeof fetch = (url, init) => {
+  public request = (
+    url: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response | null> => {
     this.updateAtRequest();
 
     const response = requestWithToken(this.accessToken, url, init);
@@ -67,6 +75,9 @@ export const issueToken = async (
       client_secret: apiClientConfig.clientSecret,
     }),
   });
+
+  assertsFetchSuccess(response);
+  assertsOkStatus(response.status);
 
   const tokenPayload: unknown = await response.json();
   assertIsTokenDto(tokenPayload);

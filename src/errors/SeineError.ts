@@ -9,7 +9,8 @@ export type SeineErrorCause =
   | 'notFound'
   | 'noPermission'
   | 'fetchError'
-  | 'ftIntraError';
+  | 'ftIntraError'
+  | 'unknown';
 
 export abstract class SeineErrorBase extends Error {
   readonly cause: SeineErrorCause;
@@ -83,6 +84,15 @@ export class SeineFetchError extends SeineErrorBase {
 export class SeineFtIntraError extends SeineErrorBase {
   constructor() {
     super('42 Intra is down.', 'ftIntraError');
+  }
+}
+
+/**
+ * @description Report to developer if this error occurres
+ */
+export class SeineUnknownError extends SeineErrorBase {
+  constructor() {
+    super('unknown', 'unknown');
   }
 }
 

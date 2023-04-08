@@ -10,6 +10,8 @@ import type {
   // eslint-disable-next-line
   Seine,
 } from './Seine.js';
+// eslint-disable-next-line
+import type { generateSeineResult } from './generateSeineResult.js';
 
 /**
  * @see Seine.requestByChunk

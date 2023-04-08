@@ -71,7 +71,7 @@ const seineRequestExample = async () => {
   // 2. Add requests
   for (let i = 0; i < 40; i++) {
     seine.addRequest(
-      `https://api.intra.42.fr/v2/scale_teams?page[number]=${i}`,
+      `https://api.intra.42.fr/v2/scale_teams?page[number]=${i + 1}`,
     );
   }
 
