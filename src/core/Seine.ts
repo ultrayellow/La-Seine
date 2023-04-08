@@ -1,27 +1,26 @@
-import * as SeineError from '../errors/SeineError.js';
+import { SeineRateLimitError } from '../errors/SeineError.js';
 import type {
   ApiClientConfig,
   FetchArg,
-  SeineFailedRequest,
   SeineInstance,
   SeineResult,
 } from '../types/Seine.js';
 import type { ApiClientStore } from './ApiClientStore.js';
+import { generateSeineResult } from './generateSeineResult.js';
 import * as helper from './Seine.helper.js';
-import { groupBy } from './util.js';
 
 interface Id {
   id: number;
 }
 export type RequestArg = Id & FetchArg;
-export type ResponseSettled = Id & PromiseSettledResult<Response>;
-export type ResponseFulfilled = Id & PromiseFulfilledResult<Response>;
+export type ResponseSettled = Id & PromiseSettledResult<Response | null>;
+export type ResponseFulfilled = Id & PromiseFulfilledResult<Response | null>;
 export type ResponseRejected = Id & PromiseRejectedResult;
 
 /**
  * @see helper.chunkRequests
  */
-const REQUEST_CHUNK_SIZE = 20;
+const REQUEST_CHUNK_SIZE = 10;
 // todo
 // eslint-disable-next-line
 const MAX_TRY_COUNT = 3;
@@ -115,7 +114,7 @@ export class Seine implements SeineInstance {
   private requestByChunk = async (
     requestChunk: RequestArg[],
   ): Promise<ResponseSettled[]> => {
-    const responsePromises: Promise<Response>[] = [];
+    const responsePromises: Promise<Response | null>[] = [];
 
     for (const request of requestChunk) {
       try {
@@ -126,7 +125,7 @@ export class Seine implements SeineInstance {
 
         responsePromises.push(promise);
       } catch (error) {
-        if (error instanceof SeineError.SeineRateLimitError) {
+        if (error instanceof SeineRateLimitError) {
           break;
         }
 
@@ -144,90 +143,3 @@ export class Seine implements SeineInstance {
     return responsesSettledWithId;
   };
 }
-
-// todo: id disappears in generated result, which should exist for retry...
-/**
- *
- * @description
- * Extract responses from fulfilled promises, failedRequests from rejected
- * promises and pending requests.
- *
- * @param requests Original requests for abort pending requests.
- * @param responsesSettled Responses of sent requests either success or fail.
- *
- * @returns Upon successfully complete all requests, returns ```SeineSuccess```.
- * Otherwise, returns ```SeineFail```.
- *
- * @see Seine.flushRequests
- *
- */
-const generateSeineResult = (
-  requests: RequestArg[],
-  responsesSettled: ResponseSettled[],
-): SeineResult => {
-  const { fulfilled, rejected } = groupBy(
-    responsesSettled,
-    (response) => response.status,
-  );
-
-  // groupBy can't narrow types.
-
-  if (fulfilled) {
-    helper.assertsResponsesFulfilled(fulfilled);
-  }
-
-  if (rejected) {
-    helper.assertsResponsesRejected(rejected);
-  }
-
-  const responses = fulfilled
-    ?.sort((a, b) => a.id - b.id)
-    .map(extractPromiseValue);
-
-  const failedRequests: SeineFailedRequest[] = [];
-
-  if (responsesSettled.length < requests.length) {
-    failedRequests.push(
-      ...requests
-        .slice(responsesSettled.length, requests.length)
-        .map((request) => ({
-          ...request,
-          error: new SeineError.SeineAbortError(),
-        })),
-    );
-  }
-
-  if (rejected) {
-    failedRequests.push(
-      ...rejected.map(({ id, reason }) => {
-        if (reason instanceof SeineError.SeineErrorBase) {
-          return { ...requests[id], error: reason };
-        }
-
-        return { ...requests[id], error: new SeineError.SeineInternalError() };
-      }),
-    );
-  }
-
-  if (responses && failedRequests.length === 0) {
-    return {
-      status: 'success',
-      responses,
-    };
-  }
-
-  return {
-    status: 'fail',
-    responses,
-    failedRequests: failedRequests,
-  };
-};
-
-/**
- * @see generateSeineResult
- */
-export const extractPromiseValue = <T>(
-  fulfilledPromise: PromiseFulfilledResult<T>,
-): T => {
-  return fulfilledPromise.value;
-};
