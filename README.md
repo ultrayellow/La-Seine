@@ -86,17 +86,17 @@ const seineRequestExample = async () => {
       console.log(data);
     }
   } else {
-    // Check for successful requests.
+    // Check for partial successful requests.
     if (result.responses) {
       for (const response of result.responses) {
         const data = await response.json();
         console.log(data);
       }
-    }
 
     // Log for failed requests.
     for (const failedRequest of result.failedRequests) {
       console.log(failedRequest.url, failedRequest.error);
+    }
     }
   }
 };
