@@ -18,7 +18,7 @@ const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
  * @see Seine
  */
 export class ApiClientStore {
-  private readonly apiClients: ApiClient[] = [];
+  private apiClients: ApiClient[] = [];
 
   // todo: custom error
   /**
@@ -39,6 +39,28 @@ export class ApiClientStore {
     try {
       const token = await issueToken(config);
       const apiClient = new ApiClient(config, token);
+
+      this.apiClients.push(apiClient);
+    } catch {
+      throw Error('Wrong Api Client.');
+    }
+  };
+
+  public updateClient = async (
+    apiClientConfig: ApiClientConfig,
+  ): Promise<void> => {
+    const config: Required<ApiClientConfig> = {
+      ...DEFAULT_RATE_LIMIT_CONFIG,
+      ...apiClientConfig,
+    };
+
+    try {
+      const token = await issueToken(config);
+      const apiClient = new ApiClient(config, token);
+
+      this.apiClients = this.apiClients.filter(
+        (client) => client.id !== config.clientId,
+      );
 
       this.apiClients.push(apiClient);
     } catch {

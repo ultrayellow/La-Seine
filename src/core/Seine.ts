@@ -44,6 +44,12 @@ export class Seine implements SeineInstance {
     await this.apiClientStore.addClient(apiClientConfig);
   };
 
+  public updateApiClient = async (
+    apiClientConfig: ApiClientConfig,
+  ): Promise<void> => {
+    await this.apiClientStore.updateClient(apiClientConfig);
+  };
+
   public addRequest = (url: RequestInfo | URL, init?: RequestInit): void => {
     this.requestPool.push({ url, init, id: this.requestPool.length });
   };

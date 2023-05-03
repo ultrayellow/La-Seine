@@ -66,6 +66,18 @@ export interface SeineInstance {
 
   /**
    *
+   * @param apiClientConfig
+   *
+   * @throws
+   * If api client config is invalid, throws an Error.
+   *
+   * @description
+   * update or add client.
+   */
+  readonly updateApiClient: (apiClientConfig: ApiClientConfig) => Promise<void>;
+
+  /**
+   *
    * @description
    * Adds request to seine instance without sending request. By calling
    * ```getResult```, user can send requests and get result of it.
