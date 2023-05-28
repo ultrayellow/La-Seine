@@ -1,37 +1,33 @@
-import { SeineRateLimitError } from '../errors/SeineError.js';
+import {
+  SeineAbortError,
+  SeineErrorBase,
+  SeineFetchError,
+} from '../errors/SeineError.js';
 import type {
   ApiClientConfig,
   FetchArg,
-  SeineInstance,
+  SeineFailedRequest,
   SeineResult,
 } from '../types/Seine.js';
 import type { ApiClientStore } from './ApiClientStore.js';
-import { generateSeineResult } from './generateSeineResult.js';
-import * as helper from './Seine.helper.js';
+import { getSeineStautsError, isOkStatus } from './request.js';
 
-interface Id {
-  id: number;
-}
-export type RequestArg = Id & FetchArg;
-export type ResponseSettled = Id & PromiseSettledResult<Response | null>;
-export type ResponseFulfilled = Id & PromiseFulfilledResult<Response | null>;
-export type ResponseRejected = Id & PromiseRejectedResult;
+type SeineRequest = {
+  index: number;
+  status: 'request';
+  fetchArg: FetchArg;
+  tryCount: number;
+  failReason?: SeineErrorBase;
+};
+type SeineResponse = { index: number; status: 'response'; response: Response };
+type SeineElement = SeineRequest | SeineResponse;
 
-/**
- * @see helper.chunkRequests
- */
-const REQUEST_CHUNK_SIZE = 10;
-// todo
-// eslint-disable-next-line
 const MAX_TRY_COUNT = 3;
-/**
- * @see helper.isAbortCondition
- */
-const MAX_FAIL_LIMIT = 50;
+const DEFAULT_CHUNK_SIZE = 10;
 
-export class Seine implements SeineInstance {
+export class Seine {
   private readonly apiClientStore: ApiClientStore;
-  private readonly requestPool: RequestArg[];
+  private readonly requestPool: SeineRequest[];
 
   constructor(apiClientManager: ApiClientStore) {
     this.apiClientStore = apiClientManager;
@@ -51,101 +47,142 @@ export class Seine implements SeineInstance {
   };
 
   public addRequest = (url: RequestInfo | URL, init?: RequestInit): void => {
-    this.requestPool.push({ url, init, id: this.requestPool.length });
+    this.requestPool.push({
+      status: 'request',
+      index: this.requestPool.length,
+      fetchArg: { url, init },
+      tryCount: 0,
+    });
   };
 
-  // todo: test length is correct
-  // todo: when request pool is empty. currently returns fail with empty arrays.
-  // todo: retry logic
   public getResult = async (): Promise<SeineResult> => {
-    const requests = this.requestPool.splice(0, this.requestPool.length);
+    const seineRequests = this.requestPool.splice(0, this.requestPool.length);
+    const resultElements = await this.flushRequests(seineRequests);
 
-    const currResult = await this.flushRequests(requests);
-
-    return currResult;
+    return generateSeineResult(resultElements);
   };
 
   /**
    *
    * @description
    * To prevent spamming too many requests in short time, Seine sends requests
-   * by chunk and await responses of it. This can also prevent unnecessarilly
-   * sending requests. (e.g. Hour rate limit reached, Too many fails occurred.)
-   *
-   * @returns Upon successfully complete all requests, returns ```SeineSuccess```.
-   * Otherwise, returns ```SeineFail```.
-   *
-   * @see Seine.getResult
-   *
+   * by chunk and await responses of it. This can also prevent unnecessary requests.
+   * (e.g. Hour rate limit reached, Too many fails occurred.)
    */
   private flushRequests = async (
-    requests: RequestArg[],
-  ): Promise<SeineResult> => {
-    const requestChunks = helper.chunkRequests(requests, REQUEST_CHUNK_SIZE);
+    seineRequests: SeineRequest[],
+  ): Promise<SeineElement[]> => {
+    const resultElements: SeineElement[] = [...seineRequests];
 
-    const responsesSettled: ResponseSettled[] = [];
+    while (true) {
+      const tryableElements = resultElements
+        .filter(isTryable)
+        .slice(0, DEFAULT_CHUNK_SIZE);
 
-    for (const requestChunk of requestChunks) {
-      const responseChunk = await this.requestByChunk(requestChunk);
-      responsesSettled.push(...responseChunk);
+      if (!tryableElements.length) {
+        break;
+      }
 
-      if (helper.isAbortCondition(responsesSettled, MAX_FAIL_LIMIT)) {
+      try {
+        const tryableResults = await this.requestTryable(tryableElements);
+
+        tryableResults.forEach((result) => {
+          resultElements[result.index] = result;
+        });
+      } catch {
         break;
       }
     }
 
-    const result = generateSeineResult(requests, responsesSettled);
-    return result;
+    return resultElements;
   };
 
   /**
    *
    * @description
-   * Wrapper function of request logic. Get available Token and send request.
-   * If no Token is available, Seine stops sending requests and treats pending
-   * requests is aborted.
-   *
-   * @example
-   * ```ts
-   * const requestChunks = chunkRequests(requests);
-   *
-   * for (const requestChunk of requestChunks) {
-   *   const responseChunk = await this.requestByChunk(requestChunk);
-   * }
-   * ```
-   *
-   * @see Seine.flushRequests
-   *
+   * Send requests and convert to ```SeineElement``` with fetch result.
    */
-  private requestByChunk = async (
-    requestChunk: RequestArg[],
-  ): Promise<ResponseSettled[]> => {
-    const responsePromises: Promise<Response | null>[] = [];
+  private requestTryable = async (
+    requests: SeineRequest[],
+  ): Promise<SeineElement[]> => {
+    const promises: Promise<SeineElement>[] = [];
 
-    for (const request of requestChunk) {
-      try {
-        const token = await this.apiClientStore.getAvailableToken();
+    for (const request of requests) {
+      request.tryCount++;
 
-        const { url, init } = request;
-        const promise = token.request(url, init);
+      const token = await this.apiClientStore.getAvailableToken();
 
-        responsePromises.push(promise);
-      } catch (error) {
-        if (error instanceof SeineRateLimitError) {
-          break;
-        }
+      const promise = token
+        .request(request.fetchArg.url, request.fetchArg.init)
+        .then((response): SeineElement => {
+          if (isFetchFail(response)) {
+            return {
+              ...request,
+              failReason: new SeineFetchError(),
+            } satisfies SeineRequest;
+          }
 
-        // todo: select token error
-        throw error;
-      }
+          if (isBadHttpStatus(response)) {
+            return {
+              ...request,
+              failReason: getSeineStautsError(response.status),
+            } satisfies SeineRequest;
+          }
+
+          return {
+            status: 'response',
+            index: request.index,
+            response: response,
+          } satisfies SeineResponse;
+        });
+
+      promises.push(promise);
     }
 
-    const responsesSettled = await Promise.allSettled(responsePromises);
-    const responsesSettledWithId = responsesSettled.map((promise, index) => ({
-      id: requestChunk[index].id,
-      ...promise,
-    }));
-
-    return responsesSettledWithId;
+    const seineElements = await Promise.all(promises);
+    return seineElements;
   };
 }
+
+/**
+ *
+ * @description
+ * generate ```SeineResult``` with ```SeineElement```.
+ */
+const generateSeineResult = (seineElements: SeineElement[]): SeineResult => {
+  const responses = seineElements
+    .filter(isResponse)
+    .map((seineResponse) => seineResponse.response);
+
+  const failedRequests = seineElements.filter(isRequest).map(
+    (seineRequest): SeineFailedRequest => ({
+      ...seineRequest.fetchArg,
+      error: seineRequest.failReason ?? new SeineAbortError(),
+    }),
+  );
+
+  const status = responses.length === seineElements.length ? 'success' : 'fail';
+
+  return {
+    status,
+    responses,
+    failedRequests,
+  };
+};
+
+const isRequest = (seineElement: SeineElement): seineElement is SeineRequest =>
+  seineElement.status === 'request';
+
+const isResponse = (
+  seineElement: SeineElement,
+): seineElement is SeineResponse => seineElement.status === 'response';
+
+const isTryable = (seineElement: SeineElement): seineElement is SeineRequest =>
+  isRequest(seineElement) && seineElement.tryCount < MAX_TRY_COUNT;
+
+const isFetchFail = (responseOrNull: Response | null): responseOrNull is null =>
+  responseOrNull === null;
+
+const isBadHttpStatus = (response: Response): boolean => {
+  return !isOkStatus(response.status);
+};

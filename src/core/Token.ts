@@ -49,7 +49,7 @@ export class Token {
 
   public isExpired = (): boolean => {
     const currTime = new Date().getTime();
-    return currTime >= this.expiredAt;
+    return currTime >= this.expiredAt - 1000;
   };
 
   public isBusy = (): boolean => {

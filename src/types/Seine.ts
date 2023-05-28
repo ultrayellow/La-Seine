@@ -27,18 +27,11 @@ export interface SeineFailedRequest {
   readonly error: SeineError;
 }
 
-export interface SeineSuccess {
-  readonly status: 'success';
+export interface SeineResult {
+  readonly status: 'success' | 'fail';
   readonly responses: Response[];
-}
-
-export interface SeineFail {
-  readonly status: 'fail';
-  readonly responses?: Response[];
   readonly failedRequests: SeineFailedRequest[];
 }
-
-export type SeineResult = SeineSuccess | SeineFail;
 
 export interface SeineInstance {
   /**
@@ -104,7 +97,7 @@ export interface SeineInstance {
    * @description
    * Sends requests in seine instance, returns result of it.
    *
-   * @returns Upon successfully complete all requests, returns ```SeineSuccess```.
+   * @returns Upon successfull completion all requests, returns ```SeineSuccess```.
    * Otherwise, returns ```SeineFail```.
    *
    * @example

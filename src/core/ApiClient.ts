@@ -16,7 +16,7 @@ export class ApiClient {
   }
 
   public getToken: () => Promise<Token> = async () => {
-    if (this.token.isExpired()) {
+    while (this.token.isExpired()) {
       this.token = await issueToken(this.config);
     }
 
